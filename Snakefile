@@ -20,10 +20,9 @@ def get_genomes_names(wildcards):
 
 rule all:
     input: 
-        "list_of_files.txt",
-        get_genomes_names
+        "list_of_files.txt"
         
-
+        
 checkpoint create_genome_list:
     output: directory("database_temp")
 
@@ -62,13 +61,20 @@ rule download_genome:
         """
 
 
+def aggregate_genomes(wildcards):
+     checkpoint_output = checkpoints.create_genome_list.get(**wildcards).output[0]
+     
+     return expand("database_unzipped//{genome}.fna.gz",
+                    genome=glob_wildcards(os.path.join(checkpoint_output, "{genome}.fna.gz")).genome)
+
+
+
 rule list_all_files:
     output: "list_of_files.txt"
 
-    input:  get_genomes_names,
-            expand("database_unzipped/{genome}.fna.gz", genome = GENOMES)
+    input:  aggregate_genomes
 
     shell:
         """
-        echo {input} > {output}
+        echo {input}
         """
