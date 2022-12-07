@@ -1,0 +1,1 @@
+database_unzipped/None.fna.gz

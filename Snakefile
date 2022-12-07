@@ -9,19 +9,20 @@ def get_genomes_names(wildcards):
     checkpoint_output = checkpoints.create_genome_list.get(**wildcards).output[0]
     global GENOMES
     GENOMES, = glob_wildcards(os.path.join(checkpoint_output, "{GENOME}.temp"))
+    #przecinek oznacza, że będą dwa outputy ale ja chcę zapisać tylko pierwszy... może
     return expand(os.path.join(checkpoint_output, "{GENOME}.temp"), GENOME=GENOMES)
 
-def get_second_files(wildcards):
-    checkpoint_output = checkpoints.create_genome_list.get(**wildcards).output[0]
-    GENOMES2, = glob_wildcards(os.path.join(checkpoint_output, "{GENOME}.temp"))
-    return expand(os.path.join(SNDDIR, "{SM}.tsv"), SM=GENOMES2)
+#def get_second_files(wildcards):
+#    checkpoint_output = checkpoints.create_genome_list.get(**wildcards).output[0]
+#    GENOMES2, = glob_wildcards(os.path.join(checkpoint_output, "{GENOME}.temp"))
+#    return expand(os.path.join(SNDDIR, "{SM}.tsv"), SM=GENOMES2)
 
 
 rule all:
     input: 
-        get_genomes_names,
-        expand("database_unzipped/{genome}.fna.gz", genome = GENOMES)
-
+        "list_of_files.txt",
+        get_genomes_names
+        
 
 checkpoint create_genome_list:
     output: directory("database_temp")
@@ -46,9 +47,9 @@ checkpoint create_genome_list:
         """
 
 rule download_genome:
-    output: "database_unzipped/{genome}.fna.gz"
+    output: directory("database_unzipped/")
 
-    input:  "database_temp/{genome}.temp"
+    input:  get_genomes_names
     
 
     shell:
@@ -64,7 +65,8 @@ rule download_genome:
 rule list_all_files:
     output: "list_of_files.txt"
 
-    input:  expand("database_unzipped/{genome}.fna.gz", genome = GENOMES)
+    input:  get_genomes_names,
+            expand("database_unzipped/{genome}.fna.gz", genome = GENOMES)
 
     shell:
         """
