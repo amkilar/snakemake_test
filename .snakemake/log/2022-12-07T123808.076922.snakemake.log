@@ -1,0 +1,5 @@
+Building DAG of jobs...
+Updating job 2 (copy_files).
+Updating job 0 (list_all_files).
+Nothing to be done.
+Complete log: /home/kilar/Desktop/GERONIMO/test/test/.snakemake/log/2022-12-07T123808.076922.snakemake.log
