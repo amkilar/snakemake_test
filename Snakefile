@@ -1,80 +1,66 @@
+# snakemake -j1 -F -p database/GCA_014905175.1_ASM1490517v1_genomic.fna --use-conda
+
 
 configfile: "config.yaml"
+#print("Config is: ", config)
 
-DATABASE_QUERY = config["database"]
+DATABASE = config["database"]
+#print(DATABASE)
 
-GENOMES = None
-
-def get_genomes_names(wildcards):
-    checkpoint_output = checkpoints.create_genome_list.get(**wildcards).output[0]
-    global GENOMES
-    GENOMES, = glob_wildcards(os.path.join(checkpoint_output, "{GENOME}.temp"))
-    #przecinek oznacza, że będą dwa outputy ale ja chcę zapisać tylko pierwszy... może
-    return expand(os.path.join(checkpoint_output, "{GENOME}.temp"), GENOME=GENOMES)
-
-#def get_second_files(wildcards):
-#    checkpoint_output = checkpoints.create_genome_list.get(**wildcards).output[0]
-#    GENOMES2, = glob_wildcards(os.path.join(checkpoint_output, "{GENOME}.temp"))
-#    return expand(os.path.join(SNDDIR, "{SM}.tsv"), SM=GENOMES2)
+#GENOMES = glob_wildcards("database/{genome}.fna").genome
 
 
-rule all:
-    input: 
-        "list_of_files.txt"
-        
-        
-checkpoint create_genome_list:
-    output: directory("database_temp")
+rule create_genome_list:
+    output: touch("temp/{genome}.fna.gz.temp")
 
     conda:  "entrez_env.yaml"
-        
+    message: "Creating the genomes list..."
+    
     shell:
-        """
-        mkdir {output};
-        
-        esearch -db assembly -query '{DATABASE_QUERY}' \
-                | esummary \
-                | xtract -pattern DocumentSummary -element FtpPath_GenBank \
-                | while read -r line ; 
-                do
-                    fname=$(echo $line | grep -o 'GCA_.*' | sed 's/$/_genomic.fna.gz/');
-                    wildcard=$(echo $fname | sed -e 's!.fna.gz!!');
+        r"""
+        esearch -db assembly -query '{DATABASE}' \
+        | esummary \
+        | xtract -pattern DocumentSummary -element FtpPath_GenBank \
+        | while read -r line ; 
+        do
+            fname=$(echo $line | grep -o 'GCA_.*' | sed 's/$/_genomic.fna.gz/') ;
+            echo "$line/$fname" > temp/$fname.temp;
+        done
+       
+        """   
 
-                    echo "$line/$fname" > {output}/$wildcard.temp;
-                done
-
-        """
 
 rule download_genome:
-    output: directory("database_unzipped/")
-
-    input:  get_genomes_names
+    output: touch("database/{genome}/{genome}.fna.gz")
     
+    input:  "temp/{genome}.fna.gz.temp"
 
+    message: "Downloading genomes..."
+    
     shell:
-        """
+        r"""
         GENOME_LINK=$(cat {input})
- 
         GENOME="${{GENOME_LINK##*/}}"
- 
-        wget -P {output}/ $GENOME_LINK 
+        wget -P ./database/{wildcards.genome}/ $GENOME_LINK 
         """
 
 
-def aggregate_genomes(wildcards):
-     checkpoint_output = checkpoints.create_genome_list.get(**wildcards).output[0]
-     
-     return expand("database_unzipped//{genome}.fna.gz",
-                    genome=glob_wildcards(os.path.join(checkpoint_output, "{genome}.fna.gz")).genome)
+rule unzip_genome:
+# Whet if the .fna.gz is corrupted? 
+# Make it being removed from further steps
+# And skipped somehow to not ruin the whole run
+    output: touch("database/{genome}/{genome}.fna")
 
+    input:  "database/{genome}/{genome}.fna.gz"
 
-
-rule list_all_files:
-    output: "list_of_files.txt"
-
-    input:  aggregate_genomes
-
+    message: "Unzipping genomes..."
+    
     shell:
-        """
-        echo {input}
-        """
+        r"""
+        gunzip {input}
+        """        
+
+
+#rule make_list:
+
+

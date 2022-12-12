@@ -2,4 +2,3 @@ CPU:  "4"
 database: '("Apis"[Organism] OR Apis[All Fields]) AND (latest[filter] AND "representative genome"[filter] AND all[filter] NOT anomalous[filter])'
 
 #database: '"Calotelea sp. ZL-2020"[Organism]'
-extract_genomic_region-length:  "200"
