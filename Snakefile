@@ -7,11 +7,9 @@ configfile: "config.yaml"
 DATABASE = config["database"]
 #print(DATABASE)
 
-#GENOMES = glob_wildcards("database/{genome}.fna").genome
-
 
 rule create_genome_list:
-    output: touch("temp/{genome}.fna.gz.temp")
+    output: touch("temp/{genome}")
 
     conda:  "entrez_env.yaml"
     message: "Creating the genomes list..."
@@ -23,8 +21,12 @@ rule create_genome_list:
         | xtract -pattern DocumentSummary -element FtpPath_GenBank \
         | while read -r line ; 
         do
-            fname=$(echo $line | grep -o 'GCA_.*' | sed 's/$/_genomic.fna.gz/') ;
-            echo "$line/$fname" > temp/$fname.temp;
+            fname=$(echo $line | grep -o 'GCA_.*' | sed 's/$/_genomic.fna.gz/');
+            wildcard=$(echo $fname | sed -e 's!.fna.gz!!');
+
+            echo "$line/$fname" > temp/$wildcard;
+            #echo $wildcard >> list_of_genomes.txt
+
         done
        
         """   
@@ -33,7 +35,7 @@ rule create_genome_list:
 rule download_genome:
     output: touch("database/{genome}/{genome}.fna.gz")
     
-    input:  "temp/{genome}.fna.gz.temp"
+    input:  "temp/{genome}"
 
     message: "Downloading genomes..."
     
@@ -46,14 +48,9 @@ rule download_genome:
 
 
 rule unzip_genome:
-# Whet if the .fna.gz is corrupted? 
-# Make it being removed from further steps
-# And skipped somehow to not ruin the whole run
     output: touch("database/{genome}/{genome}.fna")
 
     input:  "database/{genome}/{genome}.fna.gz"
-
-    message: "Unzipping genomes..."
     
     shell:
         r"""
@@ -61,6 +58,16 @@ rule unzip_genome:
         """        
 
 
-#rule make_list:
+GENOMES = os.listdir("temp/")
 
 
+rule make_summary_table:
+    output: "summary_table.txt"
+
+    input:  expand("database/{genome}/{genome}.fna", genome = GENOMES)
+
+    shell:
+        """
+        echo {input} >> {output}
+        echo " " >> {output}
+        """
