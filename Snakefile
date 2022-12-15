@@ -1,21 +1,14 @@
-# snakemake -j1 -F -p database/GCA_014905175.1_ASM1490517v1_genomic.fna --use-conda
-
-
-configfile: "config.yaml"
-#print("Config is: ", config)
-
-DATABASE = config["database"]
-#print(DATABASE)
+DATABASE = '("Apis"[Organism] OR Apis[All Fields]) AND (latest[filter] AND "representative genome"[filter] AND all[filter] NOT anomalous[filter])'
 
 
 rule create_genome_list:
-    output: touch("temp/{genome}")
-
+    output: "list_of_genomes.txt"
     conda:  "entrez_env.yaml"
-    message: "Creating the genomes list..."
     
     shell:
         r"""
+        mkdir -p temp/
+
         esearch -db assembly -query '{DATABASE}' \
         | esummary \
         | xtract -pattern DocumentSummary -element FtpPath_GenBank \
@@ -25,11 +18,43 @@ rule create_genome_list:
             wildcard=$(echo $fname | sed -e 's!.fna.gz!!');
 
             echo "$line/$fname" > temp/$wildcard;
-            #echo $wildcard >> list_of_genomes.txt
+            echo $wildcard >> list_of_genomes.txt
 
         done
-       
-        """   
+        """
+
+# second rule, a checkpoint for rules that depend on contents of "list_of_genomes.txt"
+checkpoint check_genome_list:
+    output: touch(".create_genome_list.touch")
+
+    input: "list_of_genomes.txt"
+
+
+# checkpoint code to read the genome list and specify all wildcards for genomes
+class Checkpoint_MakePattern:
+    def __init__(self, pattern):
+        self.pattern = pattern
+
+    def get_names(self):
+        with open('list_of_genomes.txt', 'rt') as fp:
+            names = [ x.rstrip() for x in fp ]
+        return names
+
+    def __call__(self, w):
+        global checkpoints
+
+        # wait for the results of 'list_of_genomes.txt'; this will trigger an
+        # exception until that rule has been run.
+        checkpoints.check_genome_list.get(**w)
+
+        # information used to expand the pattern, using arbitrary Python code
+        names = self.get_names()
+
+        pattern = expand(self.pattern, name=names, **w)
+
+        print(pattern)
+
+        return pattern
 
 
 rule download_genome:
@@ -37,8 +62,6 @@ rule download_genome:
     
     input:  "temp/{genome}"
 
-    message: "Downloading genomes..."
-    
     shell:
         r"""
         GENOME_LINK=$(cat {input})
@@ -46,28 +69,21 @@ rule download_genome:
         wget -P ./database/{wildcards.genome}/ $GENOME_LINK 
         """
 
-
 rule unzip_genome:
-    output: touch("database/{genome}/{genome}.fna")
+    output: "database/{genome}/{genome}.fna"
 
     input:  "database/{genome}/{genome}.fna.gz"
     
     shell:
         r"""
         gunzip {input}
-        """        
-
-
-GENOMES = os.listdir("temp/")
+        """   
 
 
 rule make_summary_table:
-    output: "summary_table.txt"
-
-    input:  expand("database/{genome}/{genome}.fna", genome = GENOMES)
+    output: "genomes.txt"
+    input:  Checkpoint_MakePattern("database/{name}/{name}.fna")
+    #here wildcard has to be named "name", as it must match checkpoint
 
     shell:
-        """
-        echo {input} >> {output}
-        echo " " >> {output}
-        """
+        "echo {input} >> {output}"
